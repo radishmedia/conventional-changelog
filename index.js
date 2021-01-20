@@ -7,6 +7,63 @@ const semver = require('semver');
 const concat = require('concat-stream');
 const prependFile = require('prepend-file');
 
+function getReleaseType (expectedReleaseType, currentVersion) {
+  if (isInPrerelease(currentVersion)) {
+    if (shouldContinuePrerelease(currentVersion, expectedReleaseType) ||
+      getTypePriority(getCurrentActiveType(currentVersion)) > getTypePriority(expectedReleaseType)
+    ) {
+      return 'prerelease'
+    }
+  }
+
+  return 'pre' + expectedReleaseType
+}
+
+/**
+ * if a version is currently in pre-release state,
+ * and if it current in-pre-release type is same as expect type,
+ * it should continue the pre-release with the same type
+ *
+ * @param version
+ * @param expectType
+ * @return {boolean}
+ */
+function shouldContinuePrerelease (version, expectType) {
+  return getCurrentActiveType(version) === expectType
+}
+
+function isInPrerelease (version) {
+  return Array.isArray(semver.prerelease(version))
+}
+
+const TypeList = ['major', 'minor', 'patch'].reverse()
+
+/**
+ * extract the in-pre-release type in target version
+ *
+ * @param version
+ * @return {string}
+ */
+function getCurrentActiveType (version) {
+  const typelist = TypeList
+  for (let i = 0; i < typelist.length; i++) {
+    if (semver[typelist[i]](version)) {
+      return typelist[i]
+    }
+  }
+}
+
+/**
+ * calculate the priority of release type,
+ * major - 2, minor - 1, patch - 0
+ *
+ * @param type
+ * @return {number}
+ */
+function getTypePriority (type) {
+  return TypeList.indexOf(type)
+}
+
 class ConventionalChangelog extends Plugin {
   static disablePlugin() {
     return 'version';
@@ -37,12 +94,21 @@ class ConventionalChangelog extends Plugin {
 
   getIncrementedVersion({ increment, latestVersion, isPreRelease, preReleaseId }) {
     const { version } = this.getContext();
-    if (version) return version;
+
+    if (version) {
+      return version;
+    }
+
     this.debug({ increment, latestVersion, isPreRelease, preReleaseId });
+
     return new Promise((resolve, reject) =>
       conventionalRecommendedBump(this.options, (err, result) => {
         this.debug({ err, result });
-        if (err) return reject(err);
+
+        if (err) {
+          return reject(err);
+        }
+
         let { releaseType } = result;
         if (increment) {
           this.log.warn(`Recommended bump is "${releaseType}", but is overridden with "${increment}".`);
@@ -51,7 +117,7 @@ class ConventionalChangelog extends Plugin {
         if (increment && semver.valid(increment)) {
           resolve(increment);
         } else if (isPreRelease) {
-          resolve(semver.inc(latestVersion, `pre${releaseType}`, preReleaseId));
+          resolve(semver.inc(latestVersion, getReleaseType(releaseType, latestVersion), preReleaseId));
         } else if (releaseType) {
           resolve(semver.inc(latestVersion, releaseType, preReleaseId));
         } else {
