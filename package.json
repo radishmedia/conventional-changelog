@@ -32,7 +32,7 @@
   "dependencies": {
     "concat-stream": "^2.0.0",
     "conventional-changelog": "^3.1.23",
-    "conventional-recommended-bump": "^6.0.10",
+    "conventional-recommended-bump": "^6.1.0",
     "prepend-file": "^2.0.0"
   },
   "devDependencies": {
